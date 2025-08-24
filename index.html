@@ -27,9 +27,21 @@
             position: relative;
             width: 100%;
             height: 500px;
-            overflow: hidden;
-            background: #000;
+            overflow: auto;
+            background: transparent;
+            display: flex;
+            justify-content: flex-start;
         }
+
+        .viewport-container {
+            position: relative;
+            width: 1000px;
+            height: 500px;
+            overflow: hidden;
+            left: 0;
+        }
+
+
 
         .image-container {
             position: relative;
@@ -49,13 +61,14 @@
 
         .image-before {
             z-index: 1;
-            /* First image covers the entire container */
+            /* First image is clipped to show only on the left side of slider */
+            clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
         }
 
         .image-after {
             z-index: 2;
-            /* Second image is clipped by the slider position */
-            clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
+            /* Second image is clipped to show only on the right side of slider */
+            clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%);
         }
 
         .slider {
@@ -104,6 +117,8 @@
 
 
 
+
+
         .loading {
             position: absolute;
             top: 50%;
@@ -137,12 +152,15 @@
 </head>
 <body>
     <div class="container">
+
         <div class="comparison-wrapper">
-            <div class="image-container">
-                <img class="image image-before" id="imageBefore" alt="First Image (Left Side)">
-                <img class="image image-after" id="imageAfter" alt="Second Image (Right Side)">
-                <div class="slider" id="slider"></div>
-                <div class="loading" id="loading">Loading images...</div>
+            <div class="viewport-container">
+                <div class="image-container">
+                    <img class="image image-before" id="imageBefore" alt="First Image (Left Side)">
+                    <img class="image image-after" id="imageAfter" alt="Second Image (Right Side)">
+                    <div class="slider" id="slider"></div>
+                    <div class="loading" id="loading">Loading images...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -154,18 +172,113 @@
                 this.imageAfter = document.getElementById('imageAfter');
                 this.slider = document.getElementById('slider');
                 this.loading = document.getElementById('loading');
+                this.viewportContainer = document.querySelector('.viewport-container');
 
                 this.isDragging = false;
                 this.startX = 0;
                 this.sliderLeft = 0;
+                this.viewportWidth = 1000; // Default viewport width
+                this.viewportHeight = 500; // Default viewport height
 
                 this.init();
             }
 
             init() {
+                this.configureViewport();
+                this.maintainAspectRatio();
                 this.setupEventListeners();
                 this.loadImagesFromURL();
                 this.setSliderPosition(50);
+            }
+
+            configureViewport() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const width = urlParams.get('width');
+                const height = urlParams.get('height');
+
+                // Set viewport size from URL parameters or use defaults
+                if (width) {
+                    this.viewportWidth = parseInt(width);
+                    this.viewportContainer.style.width = `${this.viewportWidth}px`;
+                }
+                if (height) {
+                    this.viewportHeight = parseInt(height);
+                    this.viewportContainer.style.height = `${this.viewportHeight}px`;
+                }
+
+                // Update comparison wrapper to match viewport size
+                const comparisonWrapper = document.querySelector('.comparison-wrapper');
+                comparisonWrapper.style.width = `${this.viewportWidth}px`;
+                comparisonWrapper.style.height = `${this.viewportHeight}px`;
+
+                // Shift viewport to the left by setting left position to 0
+                this.viewportContainer.style.position = 'relative';
+                this.viewportContainer.style.left = '0';
+
+                // Log viewport dimensions after initial configuration
+                console.log('🔍 Viewport configured:', {
+                    width: this.viewportWidth,
+                    height: this.viewportHeight,
+                    source: 'URL parameters or defaults'
+                });
+            }
+
+            // Calculate and maintain aspect ratio when only one dimension is specified
+            maintainAspectRatio() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const width = urlParams.get('width');
+                const height = urlParams.get('height');
+
+                console.log('📐 Aspect ratio maintenance check:', {
+                    widthParam: width,
+                    heightParam: height,
+                    currentViewportWidth: this.viewportWidth,
+                    currentViewportHeight: this.viewportHeight
+                });
+
+                // If only one dimension is specified, wait for images to load and calculate the other
+                if ((width && !height) || (!width && height)) {
+                    console.log('🔄 Aspect ratio maintenance needed - waiting for image to load...');
+                    
+                    // Wait for first image to load to get its natural dimensions
+                    this.imageBefore.addEventListener('load', () => {
+                        const naturalWidth = this.imageBefore.naturalWidth;
+                        const naturalHeight = this.imageBefore.naturalHeight;
+                        const aspectRatio = naturalWidth / naturalHeight;
+
+                        console.log('🖼️ Image loaded with natural dimensions:', {
+                            naturalWidth,
+                            naturalHeight,
+                            aspectRatio: aspectRatio.toFixed(3)
+                        });
+
+                        if (width && !height) {
+                            // Width specified, calculate height
+                            this.viewportHeight = Math.round(this.viewportWidth / aspectRatio);
+                            this.viewportContainer.style.height = `${this.viewportHeight}px`;
+                            document.querySelector('.comparison-wrapper').style.height = `${this.viewportHeight}px`;
+                            
+                            console.log('📏 Height calculated from width:', {
+                                specifiedWidth: this.viewportWidth,
+                                calculatedHeight: this.viewportHeight,
+                                aspectRatio: aspectRatio.toFixed(3)
+                            });
+                        } else if (!width && height) {
+                            // Height specified, calculate width
+                            this.viewportWidth = Math.round(this.viewportHeight * aspectRatio);
+                            this.viewportContainer.style.width = `${this.viewportWidth}px`;
+                            document.querySelector('.comparison-wrapper').style.width = `${this.viewportWidth}px`;
+                            
+                            console.log('📏 Width calculated from height:', {
+                                specifiedHeight: this.viewportHeight,
+                                calculatedWidth: this.viewportWidth,
+                                aspectRatio: aspectRatio.toFixed(3)
+                            });
+                        }
+                    });
+                } else {
+                    console.log('✅ No aspect ratio maintenance needed - both dimensions specified or using defaults');
+                }
             }
 
             setupEventListeners() {
@@ -187,6 +300,7 @@
                 const urlParams = new URLSearchParams(window.location.search);
                 const img1 = urlParams.get('img1');
                 const img2 = urlParams.get('img2');
+
 
                 if (img1 && img2) {
                     await this.loadImages(img1, img2);
@@ -312,9 +426,15 @@
             setSliderPosition(percentage) {
                 const clampedPercentage = Math.max(0, Math.min(100, percentage));
                 
-                // Update the clip-path to show the second image only on the right side of slider
-                this.imageAfter.style.clipPath = `polygon(0 0, ${clampedPercentage}% 0, ${clampedPercentage}% 100%, 0 100%)`;
+                // Update the clip-path for first image (left side)
+                this.imageBefore.style.clipPath = `polygon(0 0, ${clampedPercentage}% 0, ${clampedPercentage}% 100%, 0 100%)`;
+                
+                // Update the clip-path for second image (right side)
+                this.imageAfter.style.clipPath = `polygon(${clampedPercentage}% 0, 100% 0, 100% 100%, ${clampedPercentage}% 100%)`;
+                
                 this.slider.style.left = `${clampedPercentage}%`;
+                
+
             }
         }
 
